@@ -1,0 +1,11 @@
+droidtop-plugin-lewdcorner
+Copyright (C) 2026 the droidtop-plugin-lewdcorner contributors
+Licensed under the GNU General Public License version 3 (see LICENSE).
+
+It embeds gamegrab (https://github.com/gamegrab-sources/plugin-common-py),
+GPL-3.0, whose XenForo helpers are ported from droidtop-plugin-f95
+(https://github.com/gamegrab-sources/droidtop-plugin-f95), GPL-3.0, which
+adapts F95Checker and f95seeker.
+
+This is an unofficial plugin. It is not part of droidtop and is not
+affiliated with or endorsed by LewdCorner or droidtop.

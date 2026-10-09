@@ -1,0 +1,56 @@
+{
+  "id": "gamegrab.lewdcorner",
+  "origin": "gamegrab",
+  "label": "LewdCorner",
+  "description": "Unofficial plugin from gamegrab-sources, not part of droidtop and not affiliated with LewdCorner. Finds LewdCorner games, links your games to their threads, tells you when a new version is out, and downloads them into your game folders with your LewdCorner session.",
+  "version": "0.1.0",
+  "kind": "python",
+  "contractVersion": 2,
+  "requestsRoot": false,
+  "abis": [],
+  "provides": [
+    {
+      "point": "library.sources",
+      "version": 1,
+      "id": "lewdcorner",
+      "label": "LewdCorner"
+    },
+    {
+      "point": "library.updates",
+      "version": 1,
+      "id": "lewdcorner",
+      "label": "LewdCorner thread",
+      "linkHint": "Thread link or number; blank unlinks"
+    },
+    {
+      "point": "ui.settings",
+      "version": 1,
+      "id": "main",
+      "target": "plugin"
+    }
+  ],
+  "permissions": [
+    {
+      "id": "net.domains",
+      "domains": [
+        "lewdcorner.com"
+      ],
+      "reason": "Reads LewdCorner's search, forum and thread pages"
+    },
+    {
+      "id": "web.session",
+      "domains": [
+        "lewdcorner.com"
+      ],
+      "reason": "Lets you sign in to LewdCorner in droidtop's browser view: the site shows download links to members and lets requests through its Cloudflare check only with that session"
+    },
+    {
+      "id": "notify.post",
+      "reason": "Tells you when a game you linked has a new version"
+    },
+    {
+      "id": "library.folders.write",
+      "reason": "Games you choose to download are placed in your game folder"
+    }
+  ]
+}
