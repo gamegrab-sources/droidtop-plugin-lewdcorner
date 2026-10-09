@@ -260,9 +260,7 @@ def _handoff(args, report):
     if not uri.startswith(BASE + "/"):
         return gg.failed("Missing link")
     title = str(args.get("title") or "LewdCorner")
-    if gg.hand_off(uri, title):
-        return gg.done("Opened in your browser")
-    return gg.done("Copy the link into your browser", view=gg.handoff_fallback(title, uri, "This version of droidtop cannot open links in other apps yet."))
+    return gg.handoff_result(uri, title, "Opened in your browser", "Open it in your browser.")
 
 
 # ------------------------------------------------------------------ library.updates (A6)

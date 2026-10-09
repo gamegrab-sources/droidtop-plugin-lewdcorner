@@ -92,6 +92,15 @@ class LewdCorner(unittest.TestCase):
         self.assertTrue(call("ui.settings", "signOut")["ok"])
         self.assertFalse(self.host.signed_in)
 
+    def test_open_the_thread_in_the_browser(self):
+        uri = plugin.thread_url(18978)
+        self.assertEqual(job("library.sources", "handoff", {"uri": uri, "title": "x"})["values"]["message"], "Opened in your browser")
+        self.assertEqual(self.host.calls[-1], ("apps", "view", {"uri": uri, "title": "x"}))
+        self.assertFalse(job("library.sources", "handoff", {"uri": "https://elsewhere.example/"})["ok"])
+        self.host.handoff = "denied"
+        page = json.loads(job("library.sources", "handoff", {"uri": uri})["values"]["view"])
+        self.assertIn("Open links in other apps", page["sections"][0]["items"][0]["subtitle"])
+
 
 class Built(unittest.TestCase):
     def test_built_plugin_loads(self):

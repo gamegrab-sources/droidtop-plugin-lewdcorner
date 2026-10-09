@@ -34,6 +34,7 @@ with the forum itself as its only source.
 - Connect to lewdcorner.com.
 - Use your signed-in session on lewdcorner.com.
 - Notifications, and adding files to your game folders.
+- Open links in other apps (a thread, in your browser).
 
 It runs contained in droidtop (no network or files of its own).
 

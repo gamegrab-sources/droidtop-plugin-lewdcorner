@@ -3,7 +3,7 @@
   "origin": "gamegrab",
   "label": "LewdCorner",
   "description": "Unofficial plugin from gamegrab-sources, not part of droidtop and not affiliated with LewdCorner. Finds LewdCorner games, links your games to their threads, tells you when a new version is out, and downloads them into your game folders with your LewdCorner session.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "kind": "python",
   "contractVersion": 2,
   "requestsRoot": false,
@@ -51,6 +51,10 @@
     {
       "id": "library.folders.write",
       "reason": "Games you choose to download are placed in your game folder"
+    },
+    {
+      "id": "apps.view",
+      "reason": "Opens a thread in your browser"
     }
   ]
 }
