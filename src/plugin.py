@@ -42,25 +42,56 @@ CHECK_BUDGET_S = 90
 plugin = gg.Plugin("LewdCorner")
 
 
-CLOUDFLARE = (
-    "LewdCorner's Cloudflare check stopped the request. Sign in on this plugin's Settings page: "
-    "droidtop's browser view passes the check, and the plugin's requests then go with that session."
+CLOUDFLARE = "LewdCorner needs you to sign in once in droidtop's browser view."
+CLOUDFLARE_MORE = (
+    "Its Cloudflare check lets this plugin's requests through only with the session droidtop's browser view "
+    "gets when you sign in there."
+)
+
+# What a Cloudflare or JavaScript check page carries instead of the forum (seen on the rig, build 1715:
+# "JavaScript is disabled ..." where the search page should be), at any status.
+_CHALLENGE = re.compile(
+    r"(?i)<title>\s*(?:Just a moment|Attention Required)|cf-chl|cf_chl_opt|challenge-platform|/cdn-cgi/challenge"
+    r"|JavaScript is disabled|Enable JavaScript and cookies|Checking (?:if the site connection is secure|your browser)"
 )
 
 
 class Blocked(gg.HostError):
-    """Cloudflare answered instead of the forum."""
+    """Cloudflare (or another browser check) answered instead of the forum."""
 
     def __init__(self):
-        super().__init__("FAILED", CLOUDFLARE)
+        super().__init__("FAILED", CLOUDFLARE + " " + CLOUDFLARE_MORE)
+
+
+def is_challenge(status, body):
+    """A browser-check page, not the forum: its markers, or (as every XenForo page names its
+    template on the <html> element) no `data-template` on an answer that is not an error page."""
+    if _CHALLENGE.search(body or ""):
+        return True
+    return status in (200, 403, 503) and 'data-template="' not in (body or "")
 
 
 def fetch(url):
-    """One page of the forum with the person's session; Blocked when Cloudflare answers."""
+    """One page of the forum with the person's session; Blocked when a browser check answers."""
     answer = gg.http(url, session=True)
-    if answer.status in (403, 503) and re.search(r"(?i)<title>\s*Just a moment|cf-chl|challenge-platform", answer.body):
+    if is_challenge(answer.status, answer.body):
         raise Blocked()
     return answer
+
+
+def sign_in_view(why):
+    """What Get games shows when the forum cannot be reached without a signed-in session: the
+    plain sentence and the Sign in action (a job: droidtop's browser view opens LewdCorner's login)."""
+    return gg.view(
+        "LewdCorner",
+        [
+            gg.info("why", CLOUDFLARE, subtitle=why),
+            gg.button("signin", "Sign in to LewdCorner", gg.job("signIn", "Sign in to LewdCorner")),
+        ],
+    )
+
+
+SIGN_IN_ROW_ID = "signin"
 
 
 def thread_url(tid):
@@ -149,15 +180,30 @@ def result_row(t):
 
 @plugin.on("library.sources", "form")
 def _form(args):
+    signed_in = gg.signed_in()
     return gg.ok(
         gg.view(
             "Search LewdCorner",
             [
                 gg.text("query", "Search", ""),
                 gg.info("hint", "Thread titles in the Games forum", subtitle="Leave it empty for the latest updated threads."),
+                None if signed_in else gg.info("signin-why", CLOUDFLARE, subtitle=CLOUDFLARE_MORE),
+                None if signed_in else gg.button("signin", "Sign in to LewdCorner", gg.job("signIn", "Sign in to LewdCorner")),
             ],
         )
     )
+
+
+def sign_in_row():
+    """The one result Get games lists while a browser check stands in the way: opening it shows
+    the sentence and the Sign in action."""
+    return {
+        "id": SIGN_IN_ROW_ID,
+        "title": "Sign in to LewdCorner",
+        "subtitle": CLOUDFLARE,
+        "badges": ["Sign in"],
+        "ref": {"signIn": True},
+    }
 
 
 @plugin.on("library.sources", "search")
@@ -166,9 +212,15 @@ def _search(args):
     query = (args.get("query") or values.get("query") or "").strip()[:100]
     try:
         rows = search(query)
-    except Blocked as e:
-        return gg.error("FAILED", str(e))
+    except Blocked:
+        return gg.ok({"results": [sign_in_row()]})
     return gg.ok({"results": [result_row(t) for t in rows[:100]]})
+
+
+@plugin.job("library.sources", "signIn")
+def _sources_sign_in(args, report):
+    ok = gg.sign_in(LOGIN_URL, SIGNED_IN_COOKIE)
+    return gg.done("Signed in to LewdCorner: search again" if ok else "Not signed in")
 
 
 def _tid(args):
@@ -181,13 +233,15 @@ def _tid(args):
 
 @plugin.on("library.sources", "detail")
 def _detail(args):
+    if (args.get("ref") or {}).get("signIn"):
+        return gg.ok(sign_in_view(CLOUDFLARE_MORE))
     tid = _tid(args)
     if tid is None:
         return gg.error("INVALID_ARGS", "Missing thread")
     try:
         t = thread(tid)
-    except Blocked as e:
-        return gg.error("FAILED", str(e))
+    except Blocked:
+        return gg.ok(sign_in_view(CLOUDFLARE_MORE))
     if t is None:
         return gg.error("NOT_FOUND", "That thread is gone")
     return gg.ok(detail_view(t, gg.signed_in()))

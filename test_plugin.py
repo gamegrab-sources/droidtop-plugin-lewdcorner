@@ -13,7 +13,7 @@ import gamegrab as gg  # noqa: E402
 import plugin  # noqa: E402
 from testing import FakeHost, envelope, install  # noqa: E402
 
-SEARCH = """<html><body><ol class="block-body">
+SEARCH = """<html data-template="search_results"><body><ol class="block-body">
 <li class="block-row block-row--separated js-inlineModContainer" data-author="a"><div class="contentRow"><div class="contentRow-main">
 <h3 class="contentRow-title"><a href="/threads/sample-game-v0-5-sample-dev.18978/"><span class="label label--blue" dir="auto">Ren'Py</span> Sample Game [v0.5] [Sample Dev]</a></h3>
 </div></div></li>
@@ -23,7 +23,7 @@ SEARCH = """<html><body><ol class="block-body">
 
 
 def thread_page(version):
-    return """<html data-csrf="1,abc"><head><title>Sample Game [%s] [Sample Dev] | LewdCorner</title></head><body>
+    return """<html data-csrf="1,abc" data-template="thread_view"><head><title>Sample Game [%s] [Sample Dev] | LewdCorner</title></head><body>
 <h1 class="p-title-value"><span class="label label--blue" dir="auto">Ren'Py</span><span class="label-append">&nbsp;</span>Sample Game [%s] [Sample Dev]</h1>
 <article class="message message--post js-post" data-content="post-1"><div class="message-content">
 <div class="bbWrapper">A story.<br /><img src="https://lewdcorner.com/attachments/cover.png" />
@@ -53,11 +53,33 @@ class LewdCorner(unittest.TestCase):
         self.assertEqual([(r["id"], r["title"], r["subtitle"], r["columns"], r["badges"]) for r in rows], [("18978", "Sample Game", "Sample Dev", ["v0.5"], ["Ren'Py"]), ("2201", "Other Game", "Studio", ["Ep. 2"], [])])
         self.assertTrue(all(a == "web.session" for a, o, _ in self.host.calls if o in ("fetch", "http")))
 
-    def test_cloudflare_says_to_sign_in(self):
+    def assert_sign_in_offered(self):
+        rows = call("library.sources", "search", {"query": "sample game"})["data"]["results"]
+        self.assertEqual([r["id"] for r in rows], ["signin"])
+        self.assertEqual(rows[0]["subtitle"], "LewdCorner needs you to sign in once in droidtop's browser view.")
+        page = call("library.sources", "detail", {"ref": rows[0]["ref"]})["data"]
+        items = page["sections"][0]["items"]
+        self.assertEqual(items[0]["title"], "LewdCorner needs you to sign in once in droidtop's browser view.")
+        self.assertEqual(items[1]["action"]["op"], "signIn")
+        self.assertEqual(job("library.sources", "signIn")["values"]["message"], "Signed in to LewdCorner: search again")
+        self.assertEqual(self.host.calls[-1], ("web.session", "sign_in", {"url": "https://lewdcorner.com/login/", "doneCookie": "xf_user"}))
+
+    def test_cloudflare_offers_sign_in(self):
+        self.host.signed_in = False  # the fake answers 403 "Just a moment..."
+        self.assert_sign_in_offered()
+
+    def test_javascript_check_page_offers_sign_in(self):
+        # What the rig got (BlueStacks, build 1715): a page saying JavaScript is disabled, not the forum.
+        self.host.pages[SEARCH_URL] = (200, "<html><body><noscript>JavaScript is disabled. In order to continue, enable JavaScript.</noscript></body></html>")
+        self.assert_sign_in_offered()
+        self.host.pages[SEARCH_URL] = (200, "<html><body>Something that is not the forum</body></html>")
+        self.assertEqual(call("library.sources", "search", {"query": "sample game"})["data"]["results"][0]["id"], "signin")
+
+    def test_form_offers_sign_in_until_signed_in(self):
+        self.assertEqual(len(call("library.sources", "form")["data"]["sections"][0]["items"]), 2)
         self.host.signed_in = False
-        reply = call("library.sources", "search", {"query": "sample game"})
-        self.assertFalse(reply["ok"])
-        self.assertIn("Sign in on this plugin's Settings page", reply["error"]["message"])
+        items = call("library.sources", "form")["data"]["sections"][0]["items"]
+        self.assertEqual(items[-1]["action"]["op"], "signIn")
 
     def test_detail_lists_the_first_posts_links(self):
         page = call("library.sources", "detail", {"ref": {"id": "18978"}})["data"]
