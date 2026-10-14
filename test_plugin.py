@@ -56,10 +56,10 @@ class LewdCorner(unittest.TestCase):
     def assert_sign_in_offered(self):
         rows = call("library.sources", "search", {"query": "sample game"})["data"]["results"]
         self.assertEqual([r["id"] for r in rows], ["signin"])
-        self.assertEqual(rows[0]["subtitle"], "LewdCorner needs you to sign in once in droidtop's browser view.")
+        self.assertEqual(rows[0]["subtitle"], "Sign in to LewdCorner to search it.")
         page = call("library.sources", "detail", {"ref": rows[0]["ref"]})["data"]
         items = page["sections"][0]["items"]
-        self.assertEqual(items[0]["title"], "LewdCorner needs you to sign in once in droidtop's browser view.")
+        self.assertEqual(items[0]["title"], "Sign in to LewdCorner to search it.")
         self.assertEqual(items[1]["action"]["op"], "signIn")
         self.assertEqual(job("library.sources", "signIn")["values"]["message"], "Signed in to LewdCorner: search again")
         self.assertEqual(self.host.calls[-1], ("web.session", "sign_in", {"url": "https://lewdcorner.com/login/", "doneCookie": "xf_user"}))
@@ -75,8 +75,22 @@ class LewdCorner(unittest.TestCase):
         self.host.pages[SEARCH_URL] = (200, "<html><body>Something that is not the forum</body></html>")
         self.assertEqual(call("library.sources", "search", {"query": "sample game"})["data"]["results"][0]["id"], "signin")
 
+    def test_the_noscript_notice_on_every_forum_page_is_not_a_check(self):
+        notice = '<noscript class="js-jsWarning"><div class="blockMessage">JavaScript is disabled. For a better experience, please enable JavaScript in your browser before proceeding.</div></noscript>'
+        self.host.pages[SEARCH_URL] = (200, SEARCH.replace("<body>", "<body>" + notice))
+        rows = call("library.sources", "search", {"query": "sample game"})["data"]["results"]
+        self.assertEqual([r["id"] for r in rows], ["18978", "2201"])
+
+    def test_site_text_never_reaches_the_screen(self):
+        noscript = '<noscript><div class="blockMessage">JavaScript is disabled. For a better experience, please enable JavaScript.</div></noscript>'
+        flood = '<html data-template="error">%s<div class="blockMessage">You must wait at least 30 seconds before performing this action.</div></html>' % noscript
+        self.host.pages[SEARCH_URL] = (200, flood)
+        reply = call("library.sources", "search", {"query": "sample game"})
+        self.assertEqual(reply["error"]["message"], "LewdCorner asks to wait a moment between searches. Try again shortly.")
+        self.assertEqual(plugin.plain_failure("<html>%s</html>" % noscript, 503), "LewdCorner is not answering right now. Try again later.")
+
     def test_form_offers_sign_in_until_signed_in(self):
-        self.assertEqual(len(call("library.sources", "form")["data"]["sections"][0]["items"]), 2)
+        self.assertEqual(len(call("library.sources", "form")["data"]["sections"][0]["items"]), 1)
         self.host.signed_in = False
         items = call("library.sources", "form")["data"]["sections"][0]["items"]
         self.assertEqual(items[-1]["action"]["op"], "signIn")
@@ -117,7 +131,7 @@ class LewdCorner(unittest.TestCase):
     def test_open_the_thread_in_the_browser(self):
         uri = plugin.thread_url(18978)
         self.assertEqual(job("library.sources", "handoff", {"uri": uri, "title": "x"})["values"]["message"], "Opened in your browser")
-        self.assertEqual(self.host.calls[-1], ("apps", "view", {"uri": uri, "title": "x"}))
+        self.assertEqual(self.host.calls[-1], ("link", "open", {"uri": uri, "title": "x"}))
         self.assertFalse(job("library.sources", "handoff", {"uri": "https://elsewhere.example/"})["ok"])
         self.host.handoff = "denied"
         page = json.loads(job("library.sources", "handoff", {"uri": uri})["values"]["view"])

@@ -42,11 +42,8 @@ CHECK_BUDGET_S = 90
 plugin = gg.Plugin("LewdCorner")
 
 
-CLOUDFLARE = "LewdCorner needs you to sign in once in droidtop's browser view."
-CLOUDFLARE_MORE = (
-    "Its Cloudflare check lets this plugin's requests through only with the session droidtop's browser view "
-    "gets when you sign in there."
-)
+CLOUDFLARE = "Sign in to LewdCorner to search it."
+CLOUDFLARE_MORE = "LewdCorner checks for a browser. Signing in once gets past it."
 
 # What a Cloudflare or JavaScript check page carries instead of the forum (seen on the rig, build 1715:
 # "JavaScript is disabled ..." where the search page should be), at any status.
@@ -66,7 +63,9 @@ class Blocked(gg.HostError):
 def is_challenge(status, body):
     """A browser-check page, not the forum: its markers, or (as every XenForo page names its
     template on the <html> element) no `data-template` on an answer that is not an error page."""
-    if _CHALLENGE.search(body or ""):
+    # Every XenForo page carries "JavaScript is disabled" in a <noscript> notice, so that text counts only
+    # outside <noscript>; a check page that has nothing else is still caught by the data-template test below.
+    if _CHALLENGE.search(re.sub(r"(?is)<noscript\b.*?</noscript>", "", body or "")):
         return True
     return status in (200, 403, 503) and 'data-template="' not in (body or "")
 
@@ -111,9 +110,24 @@ def latest_url():
 
 
 def site_message(page):
-    """XenForo's own error text on a page (search flood control, members only, ...)."""
-    m = re.search(r'(?is)<div class="blockMessage[^"]*"[^>]*>(.*?)</div>', page or "")
+    """XenForo's own error text on a page (search flood control, members only, ...), skipping the
+    "JavaScript is disabled" notice every page carries in <noscript>. For deciding what happened only:
+    the site's own words never reach the screen (plain_failure says it instead)."""
+    page = re.sub(r"(?is)<noscript\b.*?</noscript>", "", page or "")
+    m = re.search(r'(?is)<div class="blockMessage[^"]*"[^>]*>(.*?)</div>', page)
     return gg.one_line(m.group(1)) if m else None
+
+
+def plain_failure(page, status):
+    """What went wrong, in plain words, from a forum page that is not the answer."""
+    said = (site_message(page) or "").lower()
+    if re.search(r"wait|flood|too many|seconds", said):
+        return "LewdCorner asks to wait a moment between searches. Try again shortly."
+    if re.search(r"permission|members|log in|logged in|register", said):
+        return "LewdCorner shows this to members only. Sign in first."
+    if status and not 200 <= status < 300:
+        return gg.http_error("LewdCorner", status)
+    return "LewdCorner could not search right now. Try again later."
 
 
 def search(query):
@@ -122,12 +136,12 @@ def search(query):
     def produce():
         answer = fetch(url)
         if not answer.ok:
-            raise gg.HostError("FAILED", site_message(answer.body) or "LewdCorner answered HTTP %d" % answer.status)
+            raise gg.HostError("FAILED", plain_failure(answer.body, answer.status))
         rows = gg.thread_list(answer.body, DOMAIN)
         if not rows:
             message = site_message(answer.body)
             if message and not re.search(r"(?i)no results", message):
-                raise gg.HostError("FAILED", message)
+                raise gg.HostError("FAILED", plain_failure(answer.body, answer.status))
         return rows
 
     return gg.cached("search-" + url, SEARCH_CACHE_S, produce)
@@ -139,9 +153,9 @@ def thread(tid):
     if answer.status in (404, 410):
         return None
     if answer.status == 403:
-        raise gg.HostError("FAILED", site_message(answer.body) or "LewdCorner shows that thread only to some members")
+        raise gg.HostError("FAILED", "LewdCorner shows that thread to some members only.")
     if not answer.ok:
-        raise gg.HostError("FAILED", "LewdCorner answered HTTP %d" % answer.status)
+        raise gg.HostError("FAILED", gg.http_error("LewdCorner", answer.status))
     t = gg.thread_page(answer.body, DOMAIN)
     t["id"] = tid
     t["links"] = download_links(t["first_post"])
@@ -185,8 +199,7 @@ def _form(args):
         gg.view(
             "Search LewdCorner",
             [
-                gg.text("query", "Search", ""),
-                gg.info("hint", "Thread titles in the Games forum", subtitle="Leave it empty for the latest updated threads."),
+                gg.text("query", "Search", "", subtitle="Game titles. Leave it empty for the latest updates."),
                 None if signed_in else gg.info("signin-why", CLOUDFLARE, subtitle=CLOUDFLARE_MORE),
                 None if signed_in else gg.button("signin", "Sign in to LewdCorner", gg.job("signIn", "Sign in to LewdCorner")),
             ],
@@ -247,10 +260,7 @@ def _detail(args):
     return gg.ok(detail_view(t, gg.signed_in()))
 
 
-DOWNLOAD_NOTE = (
-    "Opens the link in droidtop's browser view with your LewdCorner session. Go through the "
-    "file host's page yourself; the download it starts runs in droidtop's Downloads into this game folder."
-)
+DOWNLOAD_NOTE = "Opens the file host's page. The download it starts goes to Downloads."
 
 
 def detail_view(t, signed_in):
@@ -266,7 +276,8 @@ def detail_view(t, signed_in):
     links = t.get("links") or []
     rows = []
     if not signed_in:
-        rows.append(gg.info("signin", "Sign in to download", subtitle="LewdCorner shows download links to members. Sign in on this plugin's Settings page."))
+        rows.append(gg.info("signin", "Sign in to download", subtitle="LewdCorner shows download links to members."))
+        rows.append(gg.button("signin-button", "Sign in to LewdCorner", gg.job("signIn", "Sign in to LewdCorner")))
     if links:
         for i, (href, label) in enumerate(links[:40]):
             host = urlparse(href).hostname or href
@@ -279,7 +290,7 @@ def detail_view(t, signed_in):
                 )
             )
     elif signed_in:
-        rows.append(gg.info("none", "No download links in the first post", subtitle="Open the thread to see where it keeps them."))
+        rows.append(gg.info("none", "No download links found", subtitle="Open the thread to see what it offers."))
     sections.append(gg.section("downloads", rows, "Download"))
     return gg.view(gg.cut(t.get("name") or t.get("title") or "Thread", 200), [], sections=sections)
 
@@ -291,7 +302,7 @@ def _acquire(args, report):
     if tid is None or not link.startswith("https://"):
         return gg.failed("Choose a download link first")
     if not gg.signed_in():
-        return gg.failed("LewdCorner shows download links to members: sign in on this plugin's Settings page first")
+        return gg.failed("Sign in to LewdCorner first.")
     try:
         t = thread(tid)
     except Blocked as e:
@@ -300,7 +311,7 @@ def _acquire(args, report):
         return gg.failed("That thread is gone")
     if link not in [h for h, _ in t["links"]]:
         return gg.failed("That link is no longer in the thread; open it again")
-    report(-1, "Opening %s in droidtop's browser view" % (urlparse(link).hostname or "the link"))
+    report(-1, "Opening %s" % (urlparse(link).hostname or "the link"))
     download = gg.open_in_session(link)
     if download is None:
         return gg.failed("No download was started on that page")
@@ -397,14 +408,13 @@ def settings_view(signed_in):
             "account",
             "LewdCorner account",
             "Signed in" if signed_in else "Not signed in",
-            subtitle="You sign in on LewdCorner's own page in droidtop's browser view; this plugin never sees your password.",
+            subtitle="On LewdCorner's own page. This plugin never sees your password.",
         )
     ]
     if signed_in:
         items.append(gg.button("signout", "Sign out", gg.call_action("signOut")))
     else:
         items.append(gg.button("signin", "Sign in to LewdCorner", gg.job("signIn", "Sign in to LewdCorner")))
-    items.append(gg.info("why", "Why sign in", subtitle="LewdCorner shows download links to members, and its Cloudflare check lets the plugin's requests through only with the session droidtop's browser view got."))
     return gg.view("LewdCorner", items)
 
 

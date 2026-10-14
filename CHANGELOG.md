@@ -3,6 +3,19 @@
 Every working build of `main` is a release (`v<version>-<CI run>`); the
 declared version moves with every change to the plugin's sources.
 
+## 0.3.0
+
+- Signed-in searches no longer read as LewdCorner's browser check: every
+  XenForo page carries "JavaScript is disabled" in a <noscript> notice,
+  which the check test matched, so a signed-in person got the Sign in row
+  instead of results.
+- The site's own text never reaches the screen: flood control, members-only
+  and HTTP failures are plain sentences.
+- Shorter text: one-line description, sign-in and download hints, no "Why
+  sign in" row; the detail page has its own Sign in button.
+- Shared module 0.3.0 (contract 2.1 host names, needs droidtop
+  0.2.0-dev.1767 or newer; smaller data reads).
+
 ## 0.2.1
 
 - A browser-check page in place of the forum (Cloudflare's "Just a moment",
