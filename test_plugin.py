@@ -168,6 +168,17 @@ class Metadata(unittest.TestCase):
         self.assertEqual(fetched["developer"], "Sample Dev")
         self.assertEqual(fetched["genre"], "Ren'Py")
         self.assertTrue(fetched["description"].startswith("A story."))
+        self.assertEqual(fetched["cover"], "https://lewdcorner.com/attachments/cover.png")
+
+    def test_a_picture_off_the_forum_or_a_smiley_is_not_the_cover(self):
+        self.assertIsNone(plugin.first_picture('<img src="https://imgbox.example/a.png"><img src="/styles/smilies/x.png">'))
+        self.assertEqual(plugin.first_picture('<img class="bbImage" data-src="/attachments/b.jpg" src="data:x">'), "https://lewdcorner.com/attachments/b.jpg")
+
+    def test_a_second_scrape_within_the_week_asks_the_forum_nothing(self):
+        for _ in range(2):
+            call("library.metadata", "match", {"title": "sample game"})
+            call("library.metadata", "fetch", {"ids": {"thread": "18978"}})
+        self.assertEqual(len([c for c in self.host.calls if c[1] == "fetch"]), 2)
 
     def test_a_linked_game_is_its_thread_without_a_search(self):
         reply = call("library.metadata", "match", {"title": "Anything", "sourceLinks": {"lewdcorner": "77"}})["data"]

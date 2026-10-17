@@ -40,6 +40,9 @@ SOURCE_KEY = "lewdcorner"
 STATE = "state.json"
 SEARCH_CACHE_S = 30 * 60
 THREAD_CACHE_S = 30 * 60
+# The scrape keeps a search and a thread's metadata a week: a library re-scraped would otherwise ask the forum for every
+# game again (droidtop docs/SPEC.md 7h, "Fewer requests"). Get games, game pages and update checks keep their own times.
+SCRAPE_CACHE_S = 7 * 24 * 60 * 60
 CHECK_BUDGET_S = 90
 
 plugin = gg.Plugin("LewdCorner")
@@ -421,6 +424,20 @@ def folder_title(folder):
     return re.sub(r"[_.]+", " ", name).strip()
 
 
+def first_picture(post):
+    """The first picture of the thread's first post on the forum itself (its banner, by the forum's habit), for
+    droidtop to fetch as the game's cover; None when the post has none there. A picture on another host is left out:
+    droidtop fetches a plugin's picture only from the plugin's own sites."""
+    for m in re.finditer(r'(?is)<img\b[^>]*?\b(?:data-src|src)\s*=\s*["\']([^"\']+)["\']', post or ""):
+        src = gg.unescape(m.group(1))
+        if src.startswith("/"):
+            src = BASE + src
+        host = (urlparse(src).hostname or "").lower()
+        if src.startswith("https://") and (host == DOMAIN or host.endswith("." + DOMAIN)) and not re.search(r"(?i)/(styles|smilies|data/avatars)/", src):
+            return src
+    return None
+
+
 @plugin.on("library.metadata", "match")
 def _metadata_match(args):
     """droidtop's scrape asks which thread a game is (droidtop docs/SPEC.md 7h, "A source's own
@@ -439,7 +456,7 @@ def _metadata_match(args):
     found = {}
     for key, query in queries.items():
         try:
-            rows = search(query)
+            rows = gg.cached("scrape-search-" + key, SCRAPE_CACHE_S, lambda q=query: [{"id": t["id"], "name": t["name"]} for t in search(q)])
         except Blocked:
             # Not signed in, or the check came back: no answer is better than a guess.
             return gg.ok({"candidates": []})
@@ -459,12 +476,23 @@ def _metadata_fetch(args):
     except ValueError:
         return gg.error("INVALID_ARGS", "Missing thread")
     try:
-        t = thread(tid)
+        fields = gg.cached("scrape-thread-%d" % tid, SCRAPE_CACHE_S, lambda: _metadata_fields(tid))
     except Blocked as e:
         return gg.error("FAILED", str(e))
-    if t is None:
+    if fields is None:
         return gg.error("NOT_FOUND", "That thread is gone")
+    return gg.ok(fields)
+
+
+def _metadata_fields(tid):
+    """What library.metadata fetch answers for the thread, or None when it is gone."""
+    t = thread(tid)
+    if t is None:
+        return None
     fields = {"sourceLinks": {SOURCE_KEY: str(tid)}}
+    cover = first_picture(t.get("first_post") or "")
+    if cover:
+        fields["cover"] = cover
     about = gg.strip_tags(t.get("first_post") or "")
     if about:
         fields["description"] = gg.cut(about, 2000)
@@ -474,7 +502,7 @@ def _metadata_fetch(args):
     engine = next((label for label in t.get("labels") or [] if gg.engine_of([label])), None)
     if engine:
         fields["genre"] = engine
-    return gg.ok(fields)
+    return fields
 
 
 # ------------------------------------------------------------------ settings (C)

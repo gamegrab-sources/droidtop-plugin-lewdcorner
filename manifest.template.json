@@ -3,7 +3,7 @@
   "origin": "gamegrab",
   "label": "LewdCorner",
   "description": "Finds LewdCorner games, checks your linked games for new versions, and downloads them with your LewdCorner account.",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "kind": "python",
   "contractVersion": 2,
   "category": "sources",

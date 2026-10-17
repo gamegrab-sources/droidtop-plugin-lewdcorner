@@ -3,6 +3,13 @@
 Every working build of `main` is a release (`v<version>-<CI run>`); the
 declared version moves with every change to the plugin's sources.
 
+## 0.3.4
+
+- The scrape's cover: `library.metadata fetch` names the first picture of the thread's first post on the forum itself
+  (its banner) as `cover`, so a game with no cover gets it. droidtop fetches it itself, only from lewdcorner.com.
+- Fewer requests to the forum: the scrape keeps a search's threads and a thread's metadata for a week in the plugin's
+  data. Get games, game pages, downloads and update checks keep their own times.
+
 ## 0.3.3
 
 - The scrape's text for a game (`library.metadata`, droidtop Droidtop/tracker#575): a game linked to its thread gets
