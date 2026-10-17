@@ -11,6 +11,9 @@ source (there is no F95Checker-style index for it):
   hint from the thread's prefix.
 - `library.updates` (A6): a game linked to its thread is checked for a newer version from
   the thread's title.
+- `library.metadata` (A3): the scrape's text for a game: a game linked to its thread is that
+  thread; an unlinked one is searched by its title and its folder's name, exact names only, and
+  the thread it matched is named back so droidtop links the game to it.
 - `ui.settings`: sign in on LewdCorner's own page in droidtop's web view (web.session G3),
   sign out.
 
@@ -397,6 +400,81 @@ def _check(args):
     if news:
         gg.notify("New version on LewdCorner" if len(news) == 1 else "%d new versions on LewdCorner" % len(news), "\n".join(news[:8]))
     return gg.ok({"answers": answers})
+
+
+# ------------------------------------------------------------------ library.metadata (A3)
+
+_PLATFORM = re.compile(r"(?i)[-_ .](pc|win|windows|linux|mac|osx|android|market)$")
+# A version is marked (v2, Ep3) or dotted (0.9.5): a bare trailing number may be the name's own ("Fallout 4").
+_VERSION = re.compile(r"(?i)[-_ .]+((v|ver|version|ep|episode|ch|chapter)[ ._-]?\d+([._]\d+)*|\d+([._]\d+)+)[a-z]?$")
+
+
+def folder_title(folder):
+    """A game folder's name without what a release adds to it, a version and a platform:
+    "Sample_Game-0.5-pc" searches as "Sample Game" (the same rule as the F95zone plugin)."""
+    name = (folder or "").strip()
+    for _ in range(4):
+        before = name
+        name = _VERSION.sub("", _PLATFORM.sub("", name, count=1), count=1).strip()
+        if name == before:
+            break
+    return re.sub(r"[_.]+", " ", name).strip()
+
+
+@plugin.on("library.metadata", "match")
+def _metadata_match(args):
+    """droidtop's scrape asks which thread a game is (droidtop docs/SPEC.md 7h, "A source's own
+    match"). A game linked to its thread is that thread. Otherwise the title and the folder's name
+    are searched and only exact names count: one thread is the game; several with that name tie,
+    and droidtop asks the person to pick."""
+    linked = str((args.get("sourceLinks") or {}).get(SOURCE_KEY) or "")
+    if linked.isdigit():
+        return gg.ok({"candidates": [{"ids": {"thread": linked}, "confidence": 1.0}]})
+    folder = str((args.get("folder") or {}).get("name") or args.get("fileName") or "")
+    queries = {}
+    for query in (str(args.get("title") or ""), folder_title(folder)):
+        key = gg.name_key(query)
+        if key and gg.words(query):
+            queries.setdefault(key, query)
+    found = {}
+    for key, query in queries.items():
+        try:
+            rows = search(query)
+        except Blocked:
+            # Not signed in, or the check came back: no answer is better than a guess.
+            return gg.ok({"candidates": []})
+        for t in rows:
+            if gg.name_key(t["name"]) == key:
+                found.setdefault(t["id"], t["name"])
+    confidence = 0.95 if len(found) == 1 else 0.6
+    return gg.ok({"candidates": [{"ids": {"thread": str(tid)}, "confidence": confidence, "title": name} for tid, name in found.items()]})
+
+
+@plugin.on("library.metadata", "fetch")
+def _metadata_fetch(args):
+    """The thread's text for the game, and the thread itself as `sourceLinks`, so droidtop links
+    the game to it: the next scrape and the update checks find it without a search."""
+    try:
+        tid = int(str((args.get("ids") or {}).get("thread") or ""))
+    except ValueError:
+        return gg.error("INVALID_ARGS", "Missing thread")
+    try:
+        t = thread(tid)
+    except Blocked as e:
+        return gg.error("FAILED", str(e))
+    if t is None:
+        return gg.error("NOT_FOUND", "That thread is gone")
+    fields = {"sourceLinks": {SOURCE_KEY: str(tid)}}
+    about = gg.strip_tags(t.get("first_post") or "")
+    if about:
+        fields["description"] = gg.cut(about, 2000)
+    if t.get("developer"):
+        fields["developer"] = t["developer"]
+    # The engine prefix (Ren'Py, Unity, ...) as the genre line, as the F95zone plugin gives it.
+    engine = next((label for label in t.get("labels") or [] if gg.engine_of([label])), None)
+    if engine:
+        fields["genre"] = engine
+    return gg.ok(fields)
 
 
 # ------------------------------------------------------------------ settings (C)

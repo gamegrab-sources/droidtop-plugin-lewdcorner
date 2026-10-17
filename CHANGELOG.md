@@ -3,6 +3,14 @@
 Every working build of `main` is a release (`v<version>-<CI run>`); the
 declared version moves with every change to the plugin's sources.
 
+## 0.3.3
+
+- The scrape's text for a game (`library.metadata`, droidtop Droidtop/tracker#575): a game linked to its thread gets
+  the thread's description and developer. An unlinked one is searched by its title and by its folder's name less
+  version and platform ("Sample_Game-0.5-pc" is "Sample Game"), exact names only. One thread is the game; several
+  with that name tie, and droidtop asks the person to pick. `fetch` names the thread (`sourceLinks`), so droidtop
+  links the game to it. Needs the person signed in, as every LewdCorner page does.
+
 ## 0.3.2
 
 - Names its kind for droidtop's Plugins page (`category`, docs/plugin-api.md 1.2, Droidtop/tracker#179).

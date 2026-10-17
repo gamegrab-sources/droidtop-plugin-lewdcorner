@@ -151,5 +151,39 @@ class Built(unittest.TestCase):
         self.assertTrue(json.loads(scope["handle"](envelope("ui.settings", "view")))["ok"])
 
 
+
+class Metadata(unittest.TestCase):
+    """library.metadata (droidtop #575): exact names by title and folder, and the thread named back."""
+
+    def setUp(self):
+        self.host = install(gg, FakeHost({SEARCH_URL: SEARCH, plugin.thread_url(18978): thread_page("v0.5")}, signed_in=True))
+
+    def test_an_exact_name_by_the_folder_is_the_game_and_its_fetch_links_it(self):
+        reply = call("library.metadata", "match", {"title": "sample game", "folder": {"name": "Sample_Game-0.5-pc"}})["data"]
+        self.assertEqual(reply["candidates"], [{"ids": {"thread": "18978"}, "confidence": 0.95, "title": "Sample Game"}])
+        # The folder's name searches as the same name, so the forum was asked once.
+        self.assertEqual(len([c for c in self.host.calls if c[1] == "fetch"]), 1)
+        fetched = call("library.metadata", "fetch", {"ids": {"thread": "18978"}})["data"]
+        self.assertEqual(fetched["sourceLinks"], {"lewdcorner": "18978"})
+        self.assertEqual(fetched["developer"], "Sample Dev")
+        self.assertEqual(fetched["genre"], "Ren'Py")
+        self.assertTrue(fetched["description"].startswith("A story."))
+
+    def test_a_linked_game_is_its_thread_without_a_search(self):
+        reply = call("library.metadata", "match", {"title": "Anything", "sourceLinks": {"lewdcorner": "77"}})["data"]
+        self.assertEqual(reply["candidates"], [{"ids": {"thread": "77"}, "confidence": 1.0}])
+        self.assertEqual([c for c in self.host.calls if c[1] in ("fetch", "http")], [])
+
+    def test_a_near_name_is_not_a_match_and_a_check_page_is_no_answer(self):
+        self.host.pages[plugin.search_url("Sample")] = (200, SEARCH)
+        self.assertEqual(call("library.metadata", "match", {"title": "Sample"})["data"]["candidates"], [])
+        self.host.signed_in = False
+        self.assertEqual(call("library.metadata", "match", {"title": "Sample Game"})["data"]["candidates"], [])
+
+    def test_folder_titles(self):
+        self.assertEqual(plugin.folder_title("Sample_Game-0.5-pc"), "Sample Game")
+        self.assertEqual(plugin.folder_title("Game_Ep3-win"), "Game")
+        self.assertEqual(plugin.folder_title("Fallout 4"), "Fallout 4")
+
 if __name__ == "__main__":
     unittest.main()
