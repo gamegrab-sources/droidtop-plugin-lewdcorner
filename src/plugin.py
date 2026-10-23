@@ -14,8 +14,10 @@ source (there is no F95Checker-style index for it):
 - `library.metadata` (A3): the scrape's text for a game: a game linked to its thread is that
   thread; an unlinked one is searched by its title and its folder's name, exact names only, and
   the thread it matched is named back so droidtop links the game to it.
-- `ui.settings`: sign in on LewdCorner's own page in droidtop's web view (web.session G3),
-  sign out.
+- `ui.facets` (droidtop plugin-api 1.10), target `item.page`: a linked thread's update page, as
+  droidtop's bundles (its metadata, the first post, its banner, the first post's download links,
+  which droidtop opens itself with the person's session, and the thread).
+- The LewdCorner account is droidtop's own account row (web.session G3); the plugin draws none.
 
 The site sits behind a Cloudflare check, so every request goes with the person's web
 session (`web.session fetch`), which carries what droidtop's web view got when the person
@@ -410,6 +412,58 @@ def first_picture(post):
         if src.startswith("https://") and (host == DOMAIN or host.endswith("." + DOMAIN)) and not re.search(r"(?i)/(styles|smilies|data/avatars)/", src):
             return src
     return None
+
+
+# ------------------------------------------------------------------ ui.facets (droidtop plugin-api 1.10)
+
+ITEM_PAGE = "item.page"
+ITEM_TTL_S = 86400
+
+
+@plugin.on("ui.facets", "get")
+def _facets(args):
+    """The update page of a linked thread (target item.page): what droidtop asks in place of a `record`."""
+    if args.get("target") != ITEM_PAGE:
+        return gg.ok({"facets": []})
+    subject = args.get("subject") or {}
+    tid = gg.thread_id(str(subject.get("id") or ""), DOMAIN)
+    if tid is None:
+        return gg.error("INVALID_ARGS", "Missing thread")
+    try:
+        t = thread(tid)
+    except Blocked as e:
+        return e.reply()
+    if t is None:
+        return gg.error("NOT_FOUND", "That thread is gone")
+    return gg.ok({"items": [item_page(t)]})
+
+
+def item_page(t):
+    """The thread as one item of droidtop's item page: its metadata, the first post, its banner, the download
+    links of its first post (pages droidtop opens itself with the person's session) and the thread."""
+    tid = str(t["id"])
+    about = gg.strip_tags(t.get("first_post") or "")
+    meta = {"id": "meta", "kind": "metadata", "v": 1, "title": gg.cut(t.get("name") or t.get("title") or "Thread", 200)}
+    if t.get("version"):
+        meta["version"] = t["version"]
+    if t.get("developer"):
+        meta["developer"] = t["developer"]
+    if t.get("labels"):
+        meta["tags"] = t["labels"]
+    facets = [meta]
+    if about:
+        facets.append({"id": "about", "kind": "description", "v": 1, "overview": gg.cut(about, 4000)})
+    cover = first_picture(t.get("first_post") or "")
+    if cover:
+        facets.append({"id": "cover", "kind": "image", "v": 1, "role": "cover", "url": cover, "alt": meta["title"]})
+    entries = []
+    for href, label in (t.get("links") or [])[:40]:
+        host = urlparse(href).hostname or href
+        entries.append({"section": "Downloads", "host": host, "label": gg.cut(label, 200), "url": href, "kind": "page"})
+    if entries:
+        facets.append({"id": "dl", "kind": "download", "v": 1, "entries": entries})
+    facets.append({"id": "links", "kind": "links", "v": 1, "entries": [{"kind": "source", "label": "LewdCorner thread", "url": thread_url(t["id"])}]})
+    return {"source": SOURCE_KEY, "id": tid, "ttl": ITEM_TTL_S, "facets": facets}
 
 
 @plugin.on("library.metadata", "match")

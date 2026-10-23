@@ -127,6 +127,24 @@ class LewdCorner(unittest.TestCase):
         self.assertEqual((session["signIn"], session["doneCookie"]), (plugin.LOGIN_URL, plugin.SIGNED_IN_COOKIE))
         self.assertNotIn("ui.settings", [p["point"] for p in manifest["provides"]])
 
+    def test_the_update_page_is_the_threads_item_page_bundles(self):
+        reply = call("ui.facets", "get", {"target": "item.page", "subject": {"type": "item", "source": "lewdcorner", "id": "18978"}})
+        item = reply["data"]["items"][0]
+        self.assertEqual((item["source"], item["id"]), ("lewdcorner", "18978"))
+        facets = {f["kind"]: f for f in item["facets"]}
+        self.assertEqual(facets["metadata"]["title"], "Sample Game")
+        self.assertEqual(facets["metadata"]["version"], "v0.5")
+        self.assertEqual(facets["image"]["url"], "https://lewdcorner.com/attachments/cover.png")
+        self.assertEqual([e["url"] for e in facets["download"]["entries"]], ["https://files.example/abc", "https://other.example/u/xyz"])
+        self.assertEqual(facets["links"]["entries"][0]["url"], "https://lewdcorner.com/threads/18978/")
+        self.assertEqual(call("ui.facets", "get", {"target": "quickmenu"})["data"]["facets"], [])
+        gone = call("ui.facets", "get", {"target": "item.page", "subject": {"type": "item", "source": "lewdcorner", "id": "5"}})
+        self.assertEqual(gone["error"]["code"], "NOT_FOUND")
+        with open(os.path.join(HERE, "manifest.template.json"), encoding="utf-8") as f:
+            manifest = json.load(f)
+        facets_entry = [p for p in manifest["provides"] if p["point"] == "ui.facets"][0]
+        self.assertEqual(facets_entry["targets"], ["item.page"])
+
     def test_a_thread_offers_sign_in_to_see_its_links(self):
         t = plugin.thread(18978)
         page = plugin.detail_view(t, signed_in=False)

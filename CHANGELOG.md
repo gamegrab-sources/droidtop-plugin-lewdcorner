@@ -3,6 +3,13 @@
 Every working build of `main` is a release (`v<version>-<CI run>`); the
 declared version moves with every change to the plugin's sources.
 
+## 0.4.0
+
+- On facets (droidtop docs/plugin-api.md 1.10): `ui.facets` declares `item.page`, so droidtop's update page for a
+  linked thread is drawn from the thread's bundles: its metadata, the first post, its banner, the first post's download
+  links (pages droidtop opens itself with the person's session) and the thread. Before, the page fell back to the
+  older sheet, since the plugin had no `record`.
+
 ## 0.3.5
 
 - A browser check answers `BROWSER_CHECK_REQUIRED` (droidtop docs/plugin-api.md 1.3, Droidtop/tracker#592): search,
