@@ -3,6 +3,13 @@
 Every working build of `main` is a release (`v<version>-<CI run>`); the
 declared version moves with every change to the plugin's sources.
 
+## 0.4.2
+
+- Each download link names its systems (Droidtop/tracker#617), for droidtop's system picker on the Downloads tab: the
+  first post's heading over the link ("Win/Linux: ..." or a line of its own such as "Android") is the link's section,
+  and the systems it names are its `systems`. A link under no platform heading ("Walkthrough") is left for every
+  system.
+
 ## 0.4.1
 
 - The release of 0.4.0's facets and contract 3 changes. 0.4.0's two commits shared one declared version, so CI's version rule refused the second

@@ -156,6 +156,7 @@ def thread(tid):
     t = gg.thread_page(answer.body, DOMAIN)
     t["id"] = tid
     t["links"] = download_links(t["first_post"])
+    t["headings"] = link_headings(t["first_post"])
     t["hidden"] = bool(re.search(r"(?i)must be (registered|logged)[^<]{0,40}(link|see|download)", t["first_post"]))
     return t
 
@@ -172,6 +173,49 @@ def download_links(post):
             continue
         seen.add(href)
         out.append((href, text or host))
+    return out
+
+
+SYSTEM_WORDS = [
+    (re.compile(r"(?i)\b(win(dows|32|64)?|pc)\b"), "windows"),
+    (re.compile(r"(?i)\blinux\b"), "linux"),
+    (re.compile(r"(?i)\b(mac(os)?|osx|apple)\b"), "mac"),
+    (re.compile(r"(?i)\b(android|apk)\b"), "android"),
+]
+
+
+def systems_of(heading):
+    """The systems a download heading names ("Win/Linux" is windows and linux), in droidtop's words and order
+    (droidtop plugin-api 1.10, the download bundle's `systems`; Droidtop/tracker#617). Empty when it names none."""
+    spaced = re.sub(r"[/\-&,+|]", " ", heading or "")
+    return [system for words, system in SYSTEM_WORDS if words.search(spaced)]
+
+
+_LINE_BREAK = re.compile(r"(?i)<br\s*/?>|</(?:p|div|li|h[1-6])>")
+
+
+def link_headings(post):
+    """Each first-post link's heading, as forum threads lay downloads out: a line that starts with a platform
+    ("Win/Linux: <a>MEGA</a> - <a>GOFILE</a>"), or a line of its own naming one ("<b>Android</b>") above the links.
+    {href: heading}; a link under no heading is left out."""
+    out = {}
+    current = None
+    for line in _LINE_BREAK.split(post or ""):
+        if not line:
+            continue
+        found = gg.links(line, BASE + "/")
+        first = re.search(r"(?i)<a\b", line)
+        lead = gg.cut(gg.strip_tags(line[: first.start()] if first else line).strip(" :-–|\t\r\n"), 80)
+        # A short line of its own, or the words before a line's links, head what follows: one naming a platform until
+        # the next heading, one naming none ("Extras", "Walkthrough") leaves what follows for every system.
+        if lead and (found or len(lead) <= 40):
+            current = lead if systems_of(lead) else None
+        if not found:
+            continue
+        heading = current
+        for href, _ in found:
+            if heading and href not in out:
+                out[href] = heading
     return out
 
 
@@ -457,9 +501,15 @@ def item_page(t):
     if cover:
         facets.append({"id": "cover", "kind": "image", "v": 1, "role": "cover", "url": cover, "alt": meta["title"]})
     entries = []
+    headings = t.get("headings") or {}
     for href, label in (t.get("links") or [])[:40]:
         host = urlparse(href).hostname or href
-        entries.append({"section": "Downloads", "host": host, "label": gg.cut(label, 200), "url": href, "kind": "page"})
+        heading = headings.get(href)
+        entry = {"section": gg.cut(heading, 80) if heading else "Downloads", "host": host, "label": gg.cut(label, 200), "url": href, "kind": "page"}
+        systems = systems_of(heading)
+        if systems:
+            entry["systems"] = systems
+        entries.append(entry)
     if entries:
         facets.append({"id": "dl", "kind": "download", "v": 1, "entries": entries})
     facets.append({"id": "links", "kind": "links", "v": 1, "entries": [{"kind": "source", "label": "LewdCorner thread", "url": thread_url(t["id"])}]})

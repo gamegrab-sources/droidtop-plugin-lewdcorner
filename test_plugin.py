@@ -145,6 +145,23 @@ class LewdCorner(unittest.TestCase):
         facets_entry = [p for p in manifest["provides"] if p["point"] == "ui.facets"][0]
         self.assertEqual(facets_entry["targets"], ["item.page"])
 
+    def test_each_link_names_the_systems_of_its_heading(self):
+        self.assertEqual(plugin.systems_of("Win/Linux"), ["windows", "linux"])
+        self.assertEqual(plugin.systems_of("Android (APK)"), ["android"])
+        self.assertEqual(plugin.systems_of("DOWNLOAD"), [])
+        post = ('<b>Win/Linux</b><br /><a href="https://a.example/1">MEGA</a> - <a href="https://b.example/1">GOFILE</a><br />'
+                '<b>Mac</b>: <a href="https://a.example/2">MEGA</a><br />'
+                'Android: <a href="https://a.example/3">MEGA</a><br />'
+                '<a href="https://c.example/4">GOFILE</a><br />'
+                'Walkthrough: <a href="https://c.example/walk">PDF</a>')
+        self.assertEqual(plugin.link_headings(post), {
+            "https://a.example/1": "Win/Linux", "https://b.example/1": "Win/Linux",
+            "https://a.example/2": "Mac", "https://a.example/3": "Android", "https://c.example/4": "Android",
+        })
+        item = call("ui.facets", "get", {"target": "item.page", "subject": {"type": "item", "source": "lewdcorner", "id": "18978"}})["data"]["items"][0]
+        entries = [f for f in item["facets"] if f["kind"] == "download"][0]["entries"]
+        self.assertEqual([(e["section"], e["systems"]) for e in entries], [("Win/Linux", ["windows", "linux"])] * 2)
+
     def test_a_thread_offers_sign_in_to_see_its_links(self):
         t = plugin.thread(18978)
         page = plugin.detail_view(t, signed_in=False)
