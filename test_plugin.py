@@ -157,7 +157,11 @@ class LewdCorner(unittest.TestCase):
         self.assertEqual(plugin.link_headings(post), {
             "https://a.example/1": "Win/Linux", "https://b.example/1": "Win/Linux",
             "https://a.example/2": "Mac", "https://a.example/3": "Android", "https://c.example/4": "Android",
+            "https://c.example/walk": "Walkthrough",
         })
+        # An extra on a line of its own heads the links below it, and says what they are.
+        extras = plugin.link_headings('<b>Save file</b><br /><a href="https://d.example/s">MEGA</a><br />A note.<br /><a href="https://d.example/n">x</a>')
+        self.assertEqual(extras, {"https://d.example/s": "Save file"})
         item = call("ui.facets", "get", {"target": "item.page", "subject": {"type": "item", "source": "lewdcorner", "id": "18978"}})["data"]["items"][0]
         entries = [f for f in item["facets"] if f["kind"] == "download"][0]["entries"]
         self.assertEqual([(e["section"], e["systems"]) for e in entries], [("Win/Linux", ["windows", "linux"])] * 2)

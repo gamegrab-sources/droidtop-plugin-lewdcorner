@@ -194,10 +194,14 @@ def systems_of(heading):
 _LINE_BREAK = re.compile(r"(?i)<br\s*/?>|</(?:p|div|li|h[1-6])>")
 
 
+EXTRA_WORDS = re.compile(r"(?i)\b(extras?|walkthrough|guide|patch(es)?|fix(es)?|saves?|save ?files?|mods?|bonus|dlc|ost|soundtrack|art ?books?|gallery|cheats?|translation)\b")
+
+
 def link_headings(post):
-    """Each first-post link's heading, as forum threads lay downloads out: a line that starts with a platform
-    ("Win/Linux: <a>MEGA</a> - <a>GOFILE</a>"), or a line of its own naming one ("<b>Android</b>") above the links.
-    {href: heading}; a link under no heading is left out."""
+    """Each first-post link's heading, as forum threads lay downloads out: the words before the links on their line
+    ("Win/Linux: <a>MEGA</a> - <a>GOFILE</a>", "Walkthrough: <a>PDF</a>"), or a line of its own naming a platform or
+    an extra ("<b>Android</b>", "<b>Patch</b>") above them. The heading is what the link is: droidtop shows it under
+    the link ("Walkthrough") and reads its systems from it. {href: heading}; a link under no heading is left out."""
     out = {}
     current = None
     for line in _LINE_BREAK.split(post or ""):
@@ -206,10 +210,12 @@ def link_headings(post):
         found = gg.links(line, BASE + "/")
         first = re.search(r"(?i)<a\b", line)
         lead = gg.cut(gg.strip_tags(line[: first.start()] if first else line).strip(" :-–|\t\r\n"), 80)
-        # A short line of its own, or the words before a line's links, head what follows: one naming a platform until
-        # the next heading, one naming none ("Extras", "Walkthrough") leaves what follows for every system.
-        if lead and (found or len(lead) <= 40):
-            current = lead if systems_of(lead) else None
+        # The words before a line's links head them and what follows; a short line of its own heads what follows when
+        # it names a platform or an extra, and any other text line ends the heading.
+        if lead and found:
+            current = lead
+        elif lead and len(lead) <= 40:
+            current = lead if systems_of(lead) or EXTRA_WORDS.search(lead) else None
         if not found:
             continue
         heading = current

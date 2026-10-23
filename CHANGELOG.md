@@ -3,6 +3,12 @@
 Every working build of `main` is a release (`v<version>-<CI run>`); the
 declared version moves with every change to the plugin's sources.
 
+## 0.4.3
+
+- A link under a heading that names no platform keeps that heading as its section ("Walkthrough: ...", or a line of its
+  own such as "Save file" above it), so droidtop shows what the link is under it, in the Downloads tab's Extras or
+  Other (Droidtop/tracker#617). Such links stay for every system.
+
 ## 0.4.2
 
 - Each download link names its systems (Droidtop/tracker#617), for droidtop's system picker on the Downloads tab: the
