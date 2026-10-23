@@ -3,7 +3,7 @@
   "origin": "gamegrab",
   "label": "LewdCorner",
   "description": "Finds LewdCorner games, checks your linked games for new versions, and downloads them with your LewdCorner account.",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "kind": "python",
   "contractVersion": 2,
   "category": "sources",
@@ -29,12 +29,6 @@
       "version": 1,
       "id": "lewdcorner",
       "label": "LewdCorner"
-    },
-    {
-      "point": "ui.settings",
-      "version": 1,
-      "id": "main",
-      "target": "plugin"
     }
   ],
   "permissions": [
@@ -50,6 +44,8 @@
       "domains": [
         "lewdcorner.com"
       ],
+      "signIn": "https://lewdcorner.com/login/",
+      "doneCookie": "xf_user",
       "reason": "Lets you sign in to LewdCorner in droidtop's browser view: the site shows download links to members and lets requests through its Cloudflare check only with that session"
     },
     {

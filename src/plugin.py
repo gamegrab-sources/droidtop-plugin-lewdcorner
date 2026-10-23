@@ -48,8 +48,9 @@ CHECK_BUDGET_S = 90
 plugin = gg.Plugin("LewdCorner")
 
 
-CLOUDFLARE = "Sign in to LewdCorner to search it."
-CLOUDFLARE_MORE = "LewdCorner checks for a browser. Signing in once gets past it."
+# droidtop draws a browser check in its own words and offers Open the site (docs/plugin-api.md 1.3); this sentence is
+# only what its notice keeps behind Info.
+CHECKED = "LewdCorner showed a browser check instead of its pages."
 
 # What a Cloudflare or JavaScript check page carries instead of the forum (seen on the rig, build 1715:
 # "JavaScript is disabled ..." where the search page should be), at any status.
@@ -63,7 +64,10 @@ class Blocked(gg.HostError):
     """Cloudflare (or another browser check) answered instead of the forum."""
 
     def __init__(self):
-        super().__init__("FAILED", CLOUDFLARE + " " + CLOUDFLARE_MORE)
+        super().__init__("BROWSER_CHECK_REQUIRED", CHECKED)
+
+    def reply(self):
+        return gg.error(self.code, self.message)
 
 
 def is_challenge(status, body):
@@ -82,21 +86,6 @@ def fetch(url):
     if is_challenge(answer.status, answer.body):
         raise Blocked()
     return answer
-
-
-def sign_in_view(why):
-    """What Get games shows when the forum cannot be reached without a signed-in session: the
-    plain sentence and the Sign in action (a job: droidtop's browser view opens LewdCorner's login)."""
-    return gg.view(
-        "LewdCorner",
-        [
-            gg.info("why", CLOUDFLARE, subtitle=why),
-            gg.button("signin", "Sign in to LewdCorner", gg.job("signIn", "Sign in to LewdCorner")),
-        ],
-    )
-
-
-SIGN_IN_ROW_ID = "signin"
 
 
 def thread_url(tid):
@@ -200,29 +189,12 @@ def result_row(t):
 
 @plugin.on("library.sources", "form")
 def _form(args):
-    signed_in = gg.signed_in()
     return gg.ok(
         gg.view(
             "Search LewdCorner",
-            [
-                gg.text("query", "Search", "", subtitle="Game titles. Leave it empty for the latest updates."),
-                None if signed_in else gg.info("signin-why", CLOUDFLARE, subtitle=CLOUDFLARE_MORE),
-                None if signed_in else gg.button("signin", "Sign in to LewdCorner", gg.job("signIn", "Sign in to LewdCorner")),
-            ],
+            [gg.text("query", "Search", "", subtitle="Game titles. Leave it empty for the latest updates.")],
         )
     )
-
-
-def sign_in_row():
-    """The one result Get games lists while a browser check stands in the way: opening it shows
-    the sentence and the Sign in action."""
-    return {
-        "id": SIGN_IN_ROW_ID,
-        "title": "Sign in to LewdCorner",
-        "subtitle": CLOUDFLARE,
-        "badges": ["Sign in"],
-        "ref": {"signIn": True},
-    }
 
 
 @plugin.on("library.sources", "search")
@@ -231,8 +203,9 @@ def _search(args):
     query = (args.get("query") or values.get("query") or "").strip()[:100]
     try:
         rows = search(query)
-    except Blocked:
-        return gg.ok({"results": [sign_in_row()]})
+    except Blocked as e:
+        # No result row about it: droidtop says so under the source's name, with Open the site (Droidtop/tracker#592).
+        return e.reply()
     return gg.ok({"results": [result_row(t) for t in rows[:100]]})
 
 
@@ -253,14 +226,15 @@ def _tid(args):
 @plugin.on("library.sources", "detail")
 def _detail(args):
     if (args.get("ref") or {}).get("signIn"):
-        return gg.ok(sign_in_view(CLOUDFLARE_MORE))
+        # The sign-in row an older version listed, opened from a page droidtop still shows.
+        return Blocked().reply()
     tid = _tid(args)
     if tid is None:
         return gg.error("INVALID_ARGS", "Missing thread")
     try:
         t = thread(tid)
-    except Blocked:
-        return gg.ok(sign_in_view(CLOUDFLARE_MORE))
+    except Blocked as e:
+        return e.reply()
     if t is None:
         return gg.error("NOT_FOUND", "That thread is gone")
     return gg.ok(detail_view(t, gg.signed_in()))
@@ -478,7 +452,7 @@ def _metadata_fetch(args):
     try:
         fields = gg.cached("scrape-thread-%d" % tid, SCRAPE_CACHE_S, lambda: _metadata_fields(tid))
     except Blocked as e:
-        return gg.error("FAILED", str(e))
+        return e.reply()
     if fields is None:
         return gg.error("NOT_FOUND", "That thread is gone")
     return gg.ok(fields)
@@ -503,42 +477,6 @@ def _metadata_fields(tid):
     if engine:
         fields["genre"] = engine
     return fields
-
-
-# ------------------------------------------------------------------ settings (C)
-
-
-def settings_view(signed_in):
-    items = [
-        gg.info(
-            "account",
-            "LewdCorner account",
-            "Signed in" if signed_in else "Not signed in",
-            subtitle="On LewdCorner's own page. This plugin never sees your password.",
-        )
-    ]
-    if signed_in:
-        items.append(gg.button("signout", "Sign out", gg.call_action("signOut")))
-    else:
-        items.append(gg.button("signin", "Sign in to LewdCorner", gg.job("signIn", "Sign in to LewdCorner")))
-    return gg.view("LewdCorner", items)
-
-
-@plugin.on("ui.settings", "view")
-def _settings(args):
-    return gg.ok(settings_view(gg.signed_in()))
-
-
-@plugin.on("ui.settings", "signOut")
-def _sign_out(args):
-    gg.sign_out()
-    return gg.ok({"message": "Signed out of LewdCorner", "view": settings_view(False)})
-
-
-@plugin.job("ui.settings", "signIn")
-def _sign_in(args, report):
-    ok = gg.sign_in(LOGIN_URL, SIGNED_IN_COOKIE)
-    return gg.done("Signed in to LewdCorner" if ok else "Not signed in")
 
 
 handle, start_job, cancel_job = plugin.entry_points()

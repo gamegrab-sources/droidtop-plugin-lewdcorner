@@ -3,6 +3,15 @@
 Every working build of `main` is a release (`v<version>-<CI run>`); the
 declared version moves with every change to the plugin's sources.
 
+## 0.3.5
+
+- A browser check answers `BROWSER_CHECK_REQUIRED` (droidtop docs/plugin-api.md 1.3, Droidtop/tracker#592): search,
+  a thread and the scrape's `fetch` no longer return a made-up "Sign in" result or page. droidtop says the site checks
+  the browser and offers Open the site, in its own web view with the plugin's session.
+- droidtop draws the account (Droidtop/tracker#593): `web.session` declares LewdCorner's sign-in page and its
+  signed-in cookie, and the plugin's own settings page (its "LewdCorner account" row, Sign in, Sign out) is gone, as
+  are the sign-in rows on the search form. A thread still says to sign in to see its download links.
+
 ## 0.3.4
 
 - The scrape's cover: `library.metadata fetch` names the first picture of the thread's first post on the forum itself

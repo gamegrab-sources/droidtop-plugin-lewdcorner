@@ -10,8 +10,10 @@ with the forum itself as its only source.
 
 ## What it does
 
-- **Sign in** (Settings): on LewdCorner's own page, in droidtop's browser view.
-  The plugin never sees your password. The site sits behind a Cloudflare check
+- **Sign in**: droidtop's own LewdCorner account row on the plugin's page opens
+  LewdCorner's sign-in in droidtop's browser view. The plugin never sees your
+  password and draws no account row of its own. When the site shows its
+  browser check, droidtop says so under the source and offers to open the site. The site sits behind a Cloudflare check
   and shows download links to members, so the plugin's requests go with the
   session droidtop's browser view got; without it, they are refused.
 - **Get games** (droidtop's `library.sources`): searches thread titles in the

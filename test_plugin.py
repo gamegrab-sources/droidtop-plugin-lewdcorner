@@ -53,27 +53,27 @@ class LewdCorner(unittest.TestCase):
         self.assertEqual([(r["id"], r["title"], r["subtitle"], r["columns"], r["badges"]) for r in rows], [("18978", "Sample Game", "Sample Dev", ["v0.5"], ["Ren'Py"]), ("2201", "Other Game", "Studio", ["Ep. 2"], [])])
         self.assertTrue(all(a == "web.session" for a, o, _ in self.host.calls if o in ("fetch", "http")))
 
-    def assert_sign_in_offered(self):
-        rows = call("library.sources", "search", {"query": "sample game"})["data"]["results"]
-        self.assertEqual([r["id"] for r in rows], ["signin"])
-        self.assertEqual(rows[0]["subtitle"], "Sign in to LewdCorner to search it.")
-        page = call("library.sources", "detail", {"ref": rows[0]["ref"]})["data"]
-        items = page["sections"][0]["items"]
-        self.assertEqual(items[0]["title"], "Sign in to LewdCorner to search it.")
-        self.assertEqual(items[1]["action"]["op"], "signIn")
-        self.assertEqual(job("library.sources", "signIn")["values"]["message"], "Signed in to LewdCorner: search again")
-        self.assertEqual(self.host.calls[-1], ("web.session", "sign_in", {"url": "https://lewdcorner.com/login/", "doneCookie": "xf_user"}))
+    def assert_browser_check(self):
+        reply = call("library.sources", "search", {"query": "sample game"})
+        self.assertEqual(reply["error"]["code"], "BROWSER_CHECK_REQUIRED", reply)
+        self.assertNotIn("data", reply, "no made-up result row")
+        page = call("library.sources", "detail", {"ref": {"id": "18978"}})
+        self.assertEqual(page["error"]["code"], "BROWSER_CHECK_REQUIRED")
 
-    def test_cloudflare_offers_sign_in(self):
+    def test_cloudflare_is_a_browser_check(self):
         self.host.signed_in = False  # the fake answers 403 "Just a moment..."
-        self.assert_sign_in_offered()
+        self.assert_browser_check()
+        self.assertEqual(call("library.sources", "detail", {"ref": {"signIn": True}})["error"]["code"], "BROWSER_CHECK_REQUIRED")
+        self.assertEqual(call("library.metadata", "fetch", {"ids": {"thread": "18978"}})["error"]["code"], "BROWSER_CHECK_REQUIRED")
 
-    def test_javascript_check_page_offers_sign_in(self):
+    def test_javascript_check_page_is_a_browser_check(self):
         # What the rig got (BlueStacks, build 1715): a page saying JavaScript is disabled, not the forum.
-        self.host.pages[SEARCH_URL] = (200, "<html><body><noscript>JavaScript is disabled. In order to continue, enable JavaScript.</noscript></body></html>")
-        self.assert_sign_in_offered()
+        check = (200, "<html><body><noscript>JavaScript is disabled. In order to continue, enable JavaScript.</noscript></body></html>")
+        self.host.pages[SEARCH_URL] = check
+        self.host.pages[plugin.thread_url(18978)] = check
+        self.assert_browser_check()
         self.host.pages[SEARCH_URL] = (200, "<html><body>Something that is not the forum</body></html>")
-        self.assertEqual(call("library.sources", "search", {"query": "sample game"})["data"]["results"][0]["id"], "signin")
+        self.assertEqual(call("library.sources", "search", {"query": "sample game"})["error"]["code"], "BROWSER_CHECK_REQUIRED")
 
     def test_the_noscript_notice_on_every_forum_page_is_not_a_check(self):
         notice = '<noscript class="js-jsWarning"><div class="blockMessage">JavaScript is disabled. For a better experience, please enable JavaScript in your browser before proceeding.</div></noscript>'
@@ -89,11 +89,10 @@ class LewdCorner(unittest.TestCase):
         self.assertEqual(reply["error"]["message"], "LewdCorner asks to wait a moment between searches. Try again shortly.")
         self.assertEqual(plugin.plain_failure("<html>%s</html>" % noscript, 503), "LewdCorner is not answering right now. Try again later.")
 
-    def test_form_offers_sign_in_until_signed_in(self):
-        self.assertEqual(len(call("library.sources", "form")["data"]["sections"][0]["items"]), 1)
+    def test_the_form_is_only_the_search(self):
         self.host.signed_in = False
         items = call("library.sources", "form")["data"]["sections"][0]["items"]
-        self.assertEqual(items[-1]["action"]["op"], "signIn")
+        self.assertEqual([n["id"] for n in items], ["query"])
 
     def test_detail_lists_the_first_posts_links(self):
         page = call("library.sources", "detail", {"ref": {"id": "18978"}})["data"]
@@ -119,14 +118,22 @@ class LewdCorner(unittest.TestCase):
         c = call("library.updates", "match", {"title": "sample game"})["data"]["candidates"]
         self.assertEqual(c[0]["id"], "18978")
 
-    def test_sign_in_and_out(self):
-        self.host.signed_in = False
-        view = call("ui.settings", "view")["data"]
-        self.assertEqual(view["sections"][0]["items"][1]["action"]["op"], "signIn")
-        self.assertEqual(job("ui.settings", "signIn")["values"]["message"], "Signed in to LewdCorner")
-        self.assertEqual(self.host.calls[-1][2], {"url": "https://lewdcorner.com/login/", "doneCookie": "xf_user"})
-        self.assertTrue(call("ui.settings", "signOut")["ok"])
-        self.assertFalse(self.host.signed_in)
+    def test_droidtop_draws_the_account(self):
+        # Droidtop/tracker#593: the account row is droidtop's, from web.session's signIn; the plugin has no settings of its own.
+        self.assertEqual(call("ui.settings", "view")["error"]["code"], "UNSUPPORTED")
+        with open(os.path.join(HERE, "manifest.template.json"), encoding="utf-8") as f:
+            manifest = json.load(f)
+        session = [p for p in manifest["permissions"] if p["id"] == "web.session"][0]
+        self.assertEqual((session["signIn"], session["doneCookie"]), (plugin.LOGIN_URL, plugin.SIGNED_IN_COOKIE))
+        self.assertNotIn("ui.settings", [p["point"] for p in manifest["provides"]])
+
+    def test_a_thread_offers_sign_in_to_see_its_links(self):
+        t = plugin.thread(18978)
+        page = plugin.detail_view(t, signed_in=False)
+        dl = [s for s in page["sections"] if s["id"] == "downloads"][0]["items"]
+        self.assertEqual(dl[1]["action"]["op"], "signIn")
+        self.assertEqual(job("library.sources", "signIn")["values"]["message"], "Signed in to LewdCorner: search again")
+        self.assertEqual(self.host.calls[-1], ("web.session", "sign_in", {"url": "https://lewdcorner.com/login/", "doneCookie": "xf_user"}))
 
     def test_open_the_thread_in_the_browser(self):
         uri = plugin.thread_url(18978)
@@ -148,7 +155,7 @@ class Built(unittest.TestCase):
         scope = {"__name__": "built"}
         exec(compile(source, "plugin.py", "exec"), scope)
         install(scope["gg"], FakeHost())
-        self.assertTrue(json.loads(scope["handle"](envelope("ui.settings", "view")))["ok"])
+        self.assertTrue(json.loads(scope["handle"](envelope("library.sources", "form")))["ok"])
 
 
 
