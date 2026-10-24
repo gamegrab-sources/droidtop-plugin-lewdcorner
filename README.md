@@ -18,6 +18,8 @@ with the forum itself as its only source.
   session droidtop's browser view got; without it, they are refused.
 - **Get games** (droidtop's `library.sources`): searches thread titles in the
   Games forum, or lists its latest updated threads when the search is empty.
+- **Get new games** (droidtop's `featured`): the game threads with the newest posts,
+  from LewdCorner's "New posts" page.
   Results show the version, developer and prefixes (engine, status).
 - **A thread** shows its version, developer, tags, the start of its first post,
   and the download links in that post. A link opens in droidtop's browser view

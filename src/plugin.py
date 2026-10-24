@@ -75,6 +75,11 @@ class Blocked(gg.HostError):
 def is_challenge(status, body):
     """A browser-check page, not the forum: its markers, or (as every XenForo page names its
     template on the <html> element) no `data-template` on an answer that is not an error page."""
+    # A forum page (XenForo names its template) is the forum unless its title is a check's: Cloudflare puts its
+    # bot-detection script (/cdn-cgi/challenge-platform/scripts/jsd/main.js) into ordinary pages too, which made every
+    # page a "check" (the recorded "New posts" page, Droidtop/tracker#612).
+    if 'data-template="' in (body or "") and not re.search(r"(?i)<title>\s*(?:Just a moment|Attention Required)", body):
+        return False
     # Every XenForo page carries "JavaScript is disabled" in a <noscript> notice, so that text counts only
     # outside <noscript>; a check page that has nothing else is still caught by the data-template test below.
     if _CHALLENGE.search(re.sub(r"(?is)<noscript\b.*?</noscript>", "", body or "")):
@@ -104,6 +109,39 @@ def search_url(query):
 
 def latest_url():
     return "%s/forums/games.%d/" % (BASE, GAMES_NODE)
+
+
+def whats_new_url():
+    return BASE + "/whats-new/posts/"
+
+
+def game_threads(page):
+    """The game threads of a list that mixes forums (XenForo's "New posts"): the ids of the rows posted in the Games
+    forum or one of its child forums (each `games.<node>`), so discussions and site news are left out."""
+    blocks = re.split(r'(?i)(?=<div[^>]+class="structItem structItem--thread)', page or "")
+    ids = set()
+    for block in blocks[1:]:
+        if not re.search(r'href="(?:%s)?/forums/games\.\d+/"' % re.escape(BASE), block):
+            continue
+        for href, _ in gg.links(block, BASE + "/"):
+            tid = gg.thread_id(href, DOMAIN)
+            if tid:
+                ids.add(tid)
+                break
+    return [t for t in gg.thread_list(page, DOMAIN) if t["id"] in ids]
+
+
+def newest():
+    """The game threads with the newest posts, as LewdCorner's "New posts" lists them."""
+    url = whats_new_url()
+
+    def produce():
+        answer = fetch(url)
+        if not answer.ok:
+            raise gg.HostError("FAILED", plain_failure(answer.body, answer.status))
+        return game_threads(answer.body)
+
+    return gg.cached("newest", SEARCH_CACHE_S, produce)
 
 
 def site_message(page):
@@ -259,6 +297,27 @@ def _search(args):
         # No result row about it: droidtop says so under the source's name, with Open the site (Droidtop/tracker#592).
         return e.reply()
     return gg.ok({"results": [result_row(t) for t in rows[:100]]})
+
+
+# The platforms `featured` answers for: none named (Get new games' own page) and the PC ones LewdCorner's games are for.
+FEATURED_PLATFORMS = ("", "pc", "windows", "linux")
+
+
+@plugin.on("library.sources", "featured")
+def _featured(args):
+    """The game threads with LewdCorner's newest posts, newest first (droidtop docs/plugin-api.md 1.8,
+    Droidtop/tracker#612), for Get new games. A console's page gets none."""
+    if str(args.get("platform") or "").strip() not in FEATURED_PLATFORMS:
+        return gg.ok({"results": []})
+    try:
+        limit = max(1, min(int(args.get("limit") or 20), 60))
+    except (TypeError, ValueError):
+        limit = 20
+    try:
+        rows = newest()
+    except Blocked as e:
+        return e.reply()
+    return gg.ok({"results": [result_row(t) for t in rows[:limit]]})
 
 
 @plugin.job("library.sources", "signIn")

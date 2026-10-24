@@ -35,6 +35,20 @@ def thread_page(version):
 
 SEARCH_URL = plugin.search_url("sample game")
 
+# XenForo's "New posts" (/whats-new/posts/) mixes forums; Cloudflare's bot-detection script sits in ordinary pages.
+WHATS_NEW = """<html data-template="whats_new_posts"><head><script>a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';</script></head><body>
+<div class="structItem structItem--thread js-inlineModContainer"><div class="structItem-cell structItem-cell--main">
+<div class="structItem-title"><a href="/forums/games.6/?prefix_id[0]=9" class="labelLink"><span class="label label--blue" dir="auto">Ren'Py</span></a>
+<a href="/threads/new-game-v0-7-studio.2185/" data-tp-primary="on">New Game [v0.7] [Studio]</a></div>
+<ul class="structItem-parts"><li><a href="/threads/new-game-v0-7-studio.2185/">Dec 2</a></li><li><a href="/forums/games.6/">Games</a></li></ul></div></div>
+<div class="structItem structItem--thread js-inlineModContainer"><div class="structItem-cell structItem-cell--main">
+<div class="structItem-title"><a href="/threads/a-chat.900/" data-tp-primary="on">A chat about music</a></div>
+<ul class="structItem-parts"><li><a href="/forums/general-discussions.30/">General discussions</a></li></ul></div></div>
+<div class="structItem structItem--thread js-inlineModContainer"><div class="structItem-cell structItem-cell--main">
+<div class="structItem-title"><a href="/threads/finished-game-complete-dev.132/" data-tp-primary="on">Finished Game [Complete] [Dev]</a></div>
+<ul class="structItem-parts"><li><a href="/forums/games.119/">Completed games</a></li></ul></div></div>
+</body></html>"""
+
 
 def call(point, op, args=None):
     return json.loads(plugin.handle(envelope(point, op, args)))
@@ -80,6 +94,18 @@ class LewdCorner(unittest.TestCase):
         self.host.pages[SEARCH_URL] = (200, SEARCH.replace("<body>", "<body>" + notice))
         rows = call("library.sources", "search", {"query": "sample game"})["data"]["results"]
         self.assertEqual([r["id"] for r in rows], ["18978", "2201"])
+
+    def test_featured_lists_the_game_threads_with_the_newest_posts(self):
+        self.host.pages[plugin.whats_new_url()] = WHATS_NEW
+        rows = call("library.sources", "featured", {"limit": 10})["data"]["results"]
+        self.assertEqual([(r["id"], r["title"]) for r in rows], [("2185", "New Game"), ("132", "Finished Game")])
+        self.assertEqual(rows[0]["columns"], ["v0.7"])
+        self.assertEqual(len(call("library.sources", "featured", {"limit": 1})["data"]["results"]), 1)
+        self.assertEqual(call("library.sources", "featured", {"platform": "switch"})["data"]["results"], [])
+
+    def test_cloudflares_script_on_a_forum_page_is_not_a_check(self):
+        self.assertFalse(plugin.is_challenge(200, WHATS_NEW))
+        self.assertTrue(plugin.is_challenge(403, "<html data-template=\"x\"><head><title>Just a moment...</title></head></html>"))
 
     def test_site_text_never_reaches_the_screen(self):
         noscript = '<noscript><div class="blockMessage">JavaScript is disabled. For a better experience, please enable JavaScript.</div></noscript>'

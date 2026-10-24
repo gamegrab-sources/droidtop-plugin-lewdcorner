@@ -3,6 +3,15 @@
 Every working build of `main` is a release (`v<version>-<CI run>`); the
 declared version moves with every change to the plugin's sources.
 
+## 0.5.0
+
+- `featured` (droidtop docs/plugin-api.md 1.8, Droidtop/tracker#612): the game threads with LewdCorner's newest posts,
+  newest first, from its "New posts" page, for droidtop's Get new games; a thread in another forum (discussions, site
+  news) is left out. A console's page gets none.
+- A forum page is no longer taken for a browser check because Cloudflare's bot-detection script
+  (`/cdn-cgi/challenge-platform/scripts/jsd/main.js`) is in it: a page XenForo names its template on is the forum
+  unless its title is a check's ("Just a moment...", "Attention Required").
+
 ## 0.4.3
 
 - A link under a heading that names no platform keeps that heading as its section ("Walkthrough: ...", or a line of its
